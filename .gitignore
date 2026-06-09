@@ -1,0 +1,15 @@
+# Node & Vite Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Python Backend
+backend/.venv/
+backend/__pycache__/
+backend/.env
+backend/instance/
+
+# OS Files
+.DS_Store
+Thumbs.db
