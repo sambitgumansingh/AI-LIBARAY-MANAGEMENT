@@ -18,10 +18,16 @@ const Login = () => {
       });
       
       const data = await response.json();
-      if (response.ok) {
+     if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/dashboard');
+        
+        // 🔥 CRITICAL FIX: The Split Path Router 🔥
+        if (data.user.role === 'admin') {
+          navigate('/admin-dashboard');
+        } else {
+          navigate('/Dashboard');
+        }
       } else {
         setError(data.error || "Invalid email or password match.");
       }

@@ -6,18 +6,19 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // 🔥 NEW: Search and Filter States 🔥
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  
+  // 🔥 NEW: Wishlisted IDs Tracking Array 🔥
+  const [wishlistedIds, setWishlistedIds] = useState([]);
   
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState([
-    { sender: 'ai', text: '👋 Welcome back to BookHive! I can safely parse our inventory matrix to find custom matching reads. What genres do you feel like reading?' }
+    { sender: 'ai', text: 'Welcome to BookHive Core System. I can parse our cloud index files to isolate matching reading assets for your tracks. What query parameters can I assist with?' }
   ]);
   const navigate = useNavigate();
 
-  // Expanded Category List
   const categories = [
     "All Categories", "Fantasy", "Sci-Fi", "Horror", 
     "Non-Fiction", "Mystery", "Romance", "Thriller", 
@@ -25,28 +26,65 @@ const Dashboard = () => {
   ];
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/books')
-      .then(res => {
-        if (!res.ok) throw new Error("Backend server rejected the request.");
-        return res.json();
-      })
-      .then(data => {
-        setBooks(Array.isArray(data) ? data : []);
+    const token = localStorage.getItem('token');
+    
+    // 1. Fetch all books from inventory
+    const fetchBooks = fetch('http://localhost:5000/api/books').then(res => res.json());
+    
+    // 2. Fetch user's wishlist state to highlight existing red hearts
+    const fetchWishlist = fetch('http://localhost:5000/api/wishlist', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => res.ok ? res.json() : [])
+    .catch(() => []);
+
+    Promise.all([fetchBooks, fetchWishlist])
+      .then(([booksData, wishlistData]) => {
+        setBooks(Array.isArray(booksData) ? booksData : []);
+        setWishlistedIds(Array.isArray(wishlistData) ? wishlistData.map(b => b._id) : []);
         setLoading(false);
       })
       .catch(err => {
-        console.error("Error loading library catalog:", err);
-        setError("Cannot connect to Python Backend. Make sure 'python app.py' is running!");
+        console.error(err);
+        setError("Unable to interface with central database clusters.");
         setLoading(false);
       });
   }, []);
+
+  // 🔥 NEW: Inline Heart Click Toggle Mechanism 🔥
+  const handleHeartToggle = async (e, bookId) => {
+    e.stopPropagation(); // 🧠 CRITICAL: Stop click from firing navigate() on the parent card
+    const token = localStorage.getItem('token');
+    if (!token) return alert("Session authentication missing.");
+
+    try {
+      const res = await fetch('http://localhost:5000/api/wishlist/toggle', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ bookId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.isSaved) {
+          setWishlistedIds(prev => [...prev, bookId]);
+        } else {
+          setWishlistedIds(prev => prev.filter(id => id !== bookId));
+        }
+      }
+    } catch (err) {
+      console.error("Wishlist sync exception:", err);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
     const userText = chatInput;
     setMessages(prev => [...prev, { sender: 'user', text: userText }]);
     setChatInput('');
-    setMessages(prev => [...prev, { sender: 'ai', text: 'Thinking... ⚡' }]);
+    setMessages(prev => [...prev, { sender: 'ai', text: 'Processing node calculations... ⚡' }]);
 
     try {
       const token = localStorage.getItem('token');
@@ -61,44 +99,38 @@ const Dashboard = () => {
       const data = await response.json();
       setMessages(prev => [...prev.slice(0, -1), { sender: 'ai', text: data.reply }]);
     } catch (error) {
-      setMessages(prev => [...prev.slice(0, -1), { sender: 'ai', text: 'Network connection timeline timed out.' }]);
+      setMessages(prev => [...prev.slice(0, -1), { sender: 'ai', text: 'Network connection timeline failed.' }]);
     }
   };
 
-  // 🔥 NEW: The Live Filter Engine 🔥
   const filteredBooks = books.filter((book) => {
-    // 1. Check if it matches the text search (Title, Author, or ISBN)
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
       (book.title && book.title.toLowerCase().includes(searchLower)) ||
       (book.author && book.author.toLowerCase().includes(searchLower)) ||
       (book.isbn && book.isbn.toLowerCase().includes(searchLower));
 
-    // 2. Check if it matches the selected dropdown category
-    const matchesCategory = 
-      selectedCategory === 'All Categories' || book.category === selectedCategory;
-
-    // Only return true if BOTH conditions pass
+    const matchesCategory = selectedCategory === 'All Categories' || book.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
   return (
-    <div className="min-h-screen bg-[#003135] text-[#AFDDE5] p-6 sm:p-8 relative font-sans">
+    <div className="min-h-screen bg-[#0F172A] text-slate-100 p-6 sm:p-10 relative font-sans selection:bg-indigo-500/30">
       <div className="max-w-7xl mx-auto">
         
-        {/* Active Search & Filter Header Row */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-center mb-12 bg-[#024950] p-4 rounded-2xl border border-[#0FA4AF]/30 shadow-2xl max-w-3xl mx-auto">
+        {/* Sleek, Modern Control Console Row */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-center mb-12 bg-[#1E293B] p-4 rounded-xl border border-slate-800 shadow-xl max-w-3xl mx-auto">
           <input 
             type="text" 
-            placeholder="Search by title, author, or ISBN..." 
+            placeholder="Search indexing matrix by title, author, or ISBN..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-4 pr-4 py-2.5 bg-[#003135] border border-[#0FA4AF]/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#0FA4AF] focus:ring-1 focus:ring-[#0FA4AF]"
+            className="w-full pl-4 pr-4 py-2.5 bg-[#0F172A] border border-slate-700/50 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
           <select 
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-[#003135] border border-[#0FA4AF]/30 px-4 py-2.5 rounded-xl font-bold text-[#AFDDE5] focus:outline-none w-full md:w-auto"
+            className="bg-[#0F172A] border border-slate-700/50 px-4 py-2.5 rounded-lg font-semibold text-sm text-slate-300 focus:outline-none w-full md:w-48 cursor-pointer hover:border-slate-600 transition-colors"
           >
             {categories.map((cat, idx) => (
               <option key={idx} value={cat}>{cat}</option>
@@ -106,87 +138,105 @@ const Dashboard = () => {
           </select>
         </div>
 
-        {/* Dynamic State Handling for Books */}
+        {/* Inventory System State Triggers */}
         {loading ? (
-          <div className="text-center font-black text-xs tracking-widest uppercase mt-20 text-[#0FA4AF]">
-            Loading Inventory Grid... ⚡
+          <div className="text-center font-mono text-xs tracking-widest uppercase mt-32 text-slate-500 animate-pulse">
+            Querying active book arrays...
           </div>
         ) : error ? (
-          <div className="text-center bg-[#2e151b] border border-red-500/30 p-6 rounded-2xl text-red-400 font-bold max-w-lg mx-auto mt-10 shadow-lg">
+          <div className="text-center bg-rose-950/20 border border-rose-950 p-6 rounded-xl text-rose-400 font-medium max-w-lg mx-auto mt-12 text-sm shadow-lg">
             ⚠️ {error}
           </div>
         ) : books.length === 0 ? (
-          <div className="text-center bg-[#024950] border border-[#0FA4AF]/30 p-10 rounded-2xl text-[#AFDDE5] font-bold max-w-lg mx-auto mt-10">
-            📭 The database is empty! Click "+ Add Book" in the navbar above to add your first volume.
+          <div className="text-center bg-[#1E293B] border border-slate-800 p-12 rounded-xl text-slate-400 font-medium max-w-lg mx-auto mt-12 shadow-xl">
+            Directory index empty. Use Admin tools to populate records.
           </div>
         ) : filteredBooks.length === 0 ? (
-          <div className="text-center bg-[#003135] border border-[#0FA4AF]/20 p-10 rounded-2xl text-[#AFDDE5] font-bold max-w-lg mx-auto mt-10">
-            🔍 No books found matching "{searchQuery}" in {selectedCategory}. Try adjusting your filters!
+          <div className="text-center border border-slate-800/80 p-12 rounded-xl text-slate-500 font-medium max-w-lg mx-auto mt-12 text-sm">
+            Zero parameters match your criteria. Try widening structural metrics.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {/* Notice we map over filteredBooks now, not books! */}
-            {filteredBooks.map((book) => (
-              <div 
-                key={book._id} 
-                onClick={() => navigate(`/book/${book._id}`)}
-                className="bg-[#024950] rounded-2xl overflow-hidden border border-[#0FA4AF]/20 hover:border-[#0FA4AF]/60 transition-all cursor-pointer transform hover:-translate-y-1 shadow-2xl flex flex-col justify-between group"
-              >
-                <div className="p-4 flex justify-center bg-[#003135]/40">
-                  <img 
-                    src={book.image_url || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500'} 
-                    alt={book.title} 
-                    className="h-44 object-cover rounded-xl shadow-md group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h3 className="font-black text-base text-white line-clamp-1 group-hover:text-[#0FA4AF] transition-colors">{book.title}</h3>
-                    <p className="text-xs text-[#AFDDE5]/70 mt-1">by {book.author}</p>
+          /* Premium Product Grid Deck */
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredBooks.map((book) => {
+              const isSaved = wishlistedIds.includes(book._id);
+              return (
+                <div 
+                  key={book._id} 
+                  onClick={() => navigate(`/book/${book._id}`)}
+                  className="bg-[#1E293B] rounded-xl overflow-hidden border border-slate-800/60 hover:border-indigo-500/40 transition-all cursor-pointer shadow-lg hover:shadow-2xl flex flex-col justify-between group relative"
+                >
+                  {/* Image Canvas Panel with Floating Heart Overlay */}
+                  <div className="p-4 flex justify-center bg-[#131C2E]/40 relative overflow-hidden border-b border-slate-800/40">
+                    <img 
+                      src={book.image_url || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500'} 
+                      alt={book.title} 
+                      className="h-44 w-32 object-cover rounded-md shadow-md group-hover:scale-[1.03] transition-transform duration-300 border border-slate-800/20"
+                    />
+                    
+                    {/* 🔥 THE ACTIVE FLOATING HEART BUTTON 🔥 */}
+                    <button
+                      onClick={(e) => handleHeartToggle(e, book._id)}
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/70 border border-slate-700/30 backdrop-blur-sm shadow-md flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+                    >
+                      <span className={`text-sm transition-colors duration-200 ${isSaved ? 'text-rose-500' : 'text-slate-400 group-hover/btn:text-white'}`}>
+                        {isSaved ? '❤️' : '🤍'}
+                      </span>
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-[#003135]/60">
-                    <span className="text-[9px] tracking-wider font-black uppercase bg-[#003135] text-[#0FA4AF] px-2 py-0.5 rounded-md border border-[#0FA4AF]/10">
-                      {book.category}
-                    </span>
-                    <span className="text-xs font-black text-amber-400">
-                      {book.available} copies
-                    </span>
+
+                  {/* Text Properties Core Content Area */}
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-white line-clamp-1 group-hover:text-indigo-400 transition-colors">{book.title}</h3>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">by {book.author}</p>
+                    </div>
+                    
+                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-800/60">
+                      <span className="text-[9px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded">
+                        {book.category}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-400">
+                        ${book.price || '14.99'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* Floating AI Corner Activation Action Button */}
+        {/* Minimalist AI Floating Action Trigger */}
         <button
           onClick={() => setIsAiOpen(!isAiOpen)}
-          className="fixed bottom-6 right-8 bg-[#964734] hover:bg-[#964734]/90 text-white px-5 py-3.5 rounded-full shadow-2xl font-black text-xs transition-all transform hover:scale-110 active:scale-95 z-50 flex items-center gap-2 border border-white/10 uppercase tracking-widest"
+          className="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-500 text-white w-12 h-12 rounded-full shadow-xl shadow-indigo-600/20 transition-all transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center border border-indigo-400/20"
+          title="System AI"
         >
-          <span>✨</span> Ask AI
+          <span className="text-base">✨</span>
         </button>
 
-        {/* Floating Assistant Conversation Overlay */}
+        {/* High-Tech Terminal AI Chat Overlay */}
         {isAiOpen && (
-          <div className="fixed bottom-24 right-8 bg-[#024950] w-80 sm:w-96 h-[460px] rounded-2xl shadow-2xl border border-[#0FA4AF]/30 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="bg-[#003135] p-4 text-white flex justify-between items-center border-b border-[#0FA4AF]/20">
+          <div className="fixed bottom-20 right-6 bg-[#1E293B] w-80 sm:w-96 h-[440px] rounded-xl shadow-2xl border border-slate-800 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="bg-[#0F172A] p-4 text-white flex justify-between items-center border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="text-yellow-400 text-lg">✨</span>
+                <span className="text-indigo-400 text-sm">✨</span>
                 <div>
-                  <h3 className="font-black text-xs uppercase tracking-wider text-white">BookHive AI System</h3>
-                  <p className="text-[10px] text-gray-400">Scrapes catalog metrics inside your cloud database</p>
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-200">BookHive AI Agent</h3>
+                  <p className="text-[10px] text-slate-500 font-mono">Status: Connected</p>
                 </div>
               </div>
-              <button onClick={() => setIsAiOpen(false)} className="text-gray-400 hover:text-white font-bold text-sm p-1">✕</button>
+              <button onClick={() => setIsAiOpen(false)} className="text-slate-400 hover:text-white text-xs font-bold p-1">✕</button>
             </div>
 
-            <div className="flex-1 p-4 overflow-y-auto bg-[#003135]/30 space-y-3">
+            <div className="flex-1 p-4 overflow-y-auto bg-[#0F172A]/20 space-y-3">
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`p-3 rounded-2xl max-w-[85%] text-xs font-medium leading-relaxed shadow-md ${
+                  <div className={`p-3 rounded-xl max-w-[85%] text-xs font-medium leading-relaxed shadow-sm border ${
                     msg.sender === 'user' 
-                      ? 'bg-[#964734] text-white rounded-br-none border border-[#964734]/30' 
-                      : 'bg-[#024950] text-[#AFDDE5] rounded-bl-none border border-[#0FA4AF]/20'
+                      ? 'bg-indigo-600 text-white border-indigo-500/30 rounded-br-none' 
+                      : 'bg-[#1E293B] text-slate-300 border-slate-800/80 rounded-bl-none'
                   }`}>
                     {msg.text}
                   </div>
@@ -194,17 +244,17 @@ const Dashboard = () => {
               ))}
             </div>
 
-            <div className="p-3 bg-[#024950] border-t border-[#0FA4AF]/20 flex gap-2 items-center">
+            <div className="p-3 bg-[#1E293B] border-t border-slate-800/80 flex gap-2 items-center">
               <input 
                 type="text" 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Ask me anything about these books..." 
-                className="flex-1 bg-[#003135] border border-[#0FA4AF]/20 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                placeholder="Submit semantic natural language string..." 
+                className="flex-1 bg-[#0F172A] border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
               />
-              <button onClick={handleSendMessage} className="bg-[#964734] hover:bg-[#964734]/80 text-white font-black text-xs px-3 py-2 rounded-xl transition-colors shadow-md">
-                Send
+              <button onClick={handleSendMessage} className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3 py-2 rounded-lg transition-colors shadow-sm">
+                Execute
               </button>
             </div>
           </div>

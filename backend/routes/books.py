@@ -7,7 +7,7 @@ books_bp = Blueprint('books', __name__)
 
 def init_books(db):
     
-    # 1. GET ALL BOOKS (This is what populates your Dashboard!)
+    # 1. GET ALL BOOKS
     @books_bp.route('/books', methods=['GET'])
     def list_books():
         try:
@@ -22,7 +22,7 @@ def init_books(db):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    # 2. ADD A NEW BOOK (From your new Admin Gateway)
+    # 2. ADD A NEW BOOK (UPGRADED FOR V2.0)
     @books_bp.route('/books', methods=['POST'])
     @jwt_required()
     def add_new_book():
@@ -37,7 +37,12 @@ def init_books(db):
                 "isbn": data.get("isbn", ""),
                 "available": int(data.get("available", 1)),
                 "description": data.get("description", ""),
-                "image_url": data.get("image_url", "")
+                "image_url": data.get("image_url", ""),
+                
+                # 🔥 NEW BOOKHIVE 2.0 DATABASE FIELDS 🔥
+                "price": float(data.get("price", 14.99)), # Standard default price
+                "rating": float(data.get("rating", 4.8)), # Default star rating
+                "queue_list": [] # Array to hold IDs of students waiting
             }
             
             result = books_collection.insert_one(new_book)
@@ -46,7 +51,7 @@ def init_books(db):
         except Exception as e:
             return jsonify({"error": f"Failed to add book: {str(e)}"}), 500
 
-    # 3. GET A SINGLE BOOK (For your Book Details page)
+    # 3. GET A SINGLE BOOK
     @books_bp.route('/book/<book_id>', methods=['GET'])
     def get_single_book(book_id):
         try:
@@ -126,8 +131,8 @@ def init_books(db):
             {"$set": {"status": "archived"}}
         )
         return jsonify({"message": "History cleared successfully!"}), 200
-    
-# 7. RETURN A BOOK
+
+    # 7. RETURN A BOOK
     @books_bp.route('/return', methods=['POST'])
     @jwt_required()
     def return_book():
@@ -136,25 +141,22 @@ def init_books(db):
             data = request.get_json()
             loan_id = data.get('loanId')
             
-            # 1. Find the active loan
             loan = db.loans.find_one({"_id": ObjectId(loan_id), "user_id": user_id, "status": "issued"})
             if not loan:
                 return jsonify({"error": "Active loan not found"}), 404
                 
-            # 2. Mark the loan as returned
             db.loans.update_one(
                 {"_id": ObjectId(loan_id)}, 
                 {"$set": {"status": "returned", "returned_at": datetime.utcnow()}}
             )
             
-            # 3. Give the book copy back to the library shelf
             db["Book"].update_one({"_id": loan["book_id"]}, {"$inc": {"available": 1}})
             
             return jsonify({"message": "📚 Book returned successfully! Copy added back to shelf."}), 200
         except Exception as e:
             return jsonify({"error": "Failed to process return transaction."}), 500
 
-    # 8. DELETE A BOOK (Admin level action)
+    # 8. DELETE A BOOK
     @books_bp.route('/book/<book_id>', methods=['DELETE'])
     @jwt_required()
     def delete_book(book_id):
@@ -166,3 +168,50 @@ def init_books(db):
             return jsonify({"message": "🗑️ Volume permanently deleted from the hive."}), 200
         except Exception as e:
             return jsonify({"error": "Failed to delete book."}), 500
+
+    # 9. 🔥 NEW: TOGGLE WISHLIST HEART 🔥
+    @books_bp.route('/wishlist/toggle', methods=['POST'])
+    @jwt_required()
+    def toggle_wishlist():
+        try:
+            user_id = get_jwt_identity()
+            data = request.get_json()
+            book_id = data.get('bookId')
+
+            # Fetch the current user to check their wishlist array
+            user = db.users.find_one({"_id": ObjectId(user_id)})
+            wishlist = user.get("wishlist", [])
+
+            if book_id in wishlist:
+                # If it's already in the list, remove it (un-heart)
+                db.users.update_one({"_id": ObjectId(user_id)}, {"$pull": {"wishlist": book_id}})
+                return jsonify({"message": "Removed from wishlist", "isSaved": False}), 200
+            else:
+                # If it's not in the list, add it (red heart)
+                db.users.update_one({"_id": ObjectId(user_id)}, {"$addToSet": {"wishlist": book_id}})
+                return jsonify({"message": "Added to wishlist", "isSaved": True}), 200
+        except Exception as e:
+            return jsonify({"error": "Failed to update wishlist"}), 500
+
+    # 10. 🔥 NEW: GET ENTIRE WISHLIST 🔥
+    @books_bp.route('/wishlist', methods=['GET'])
+    @jwt_required()
+    def get_wishlist():
+        try:
+            user_id = get_jwt_identity()
+            user = db.users.find_one({"_id": ObjectId(user_id)})
+            wishlist_ids = user.get("wishlist", [])
+
+            # Fetch the actual book data for every ID saved in the user's wishlist
+            object_ids = [ObjectId(bid) for bid in wishlist_ids if ObjectId.is_valid(bid)]
+            books = list(db["Book"].find({"_id": {"$in": object_ids}}))
+
+            sanitized = []
+            for b in books:
+                item = dict(b)
+                item['_id'] = str(item['_id'])
+                sanitized.append(item)
+
+            return jsonify(sanitized), 200
+        except Exception as e:
+            return jsonify({"error": "Failed to retrieve wishlist"}), 500

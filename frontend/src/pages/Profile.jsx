@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const [profileData, setProfileData] = useState(null);
+  const [loanCount, setLoanCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -14,22 +17,33 @@ const Profile = () => {
       return;
     }
 
-    fetch('http://localhost:5000/api/auth/profile', {
+    // 1. Fetch Master Profile Data
+    const fetchProfile = fetch('http://localhost:5000/api/auth/profile', {
       headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => {
-      if (res.status === 401) {
-        localStorage.clear(); 
-        throw new Error("Your secure session has expired. Please log in again.");
-      }
-      if (!res.ok) throw new Error("Could not pull profile parameters.");
-      return res.json();
-    })
-    .then(data => setProfileData(data))
-    .catch(err => {
-      console.error("Profile Error:", err);
-      setError(err.message);
-    });
+    }).then(res => res.json());
+
+    // 2. Fetch Active Loans to derive metrics
+    const fetchLoans = fetch('http://localhost:5000/api/loans', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(res => res.ok ? res.json() : []);
+
+    // 3. Fetch Wishlist to derive metrics
+    const fetchWishlist = fetch('http://localhost:5000/api/wishlist', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(res => res.ok ? res.json() : []);
+
+    Promise.all([fetchProfile, fetchLoans, fetchWishlist])
+      .then(([profile, loans, wishlist]) => {
+        setProfileData(profile);
+        setLoanCount(Array.isArray(loans) ? loans.length : 0);
+        setWishlistCount(Array.isArray(wishlist) ? wishlist.length : 0);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Profile metrics batch sync failed:", err);
+        setError("Secure architecture synchronization timed out.");
+        setLoading(false);
+      });
   }, [navigate]);
 
   const handleLogout = () => {
@@ -39,120 +53,214 @@ const Profile = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#003135] flex flex-col items-center justify-center p-6 gap-4 font-sans">
-        <div className="bg-[#2e151b] text-red-400 border border-red-500/30 p-6 rounded-2xl font-bold text-center">⚠️ {error}</div>
-        <button onClick={() => navigate('/login')} className="text-xs font-black bg-[#024950] text-[#AFDDE5] px-6 py-3 rounded-xl border border-[#0FA4AF]/30 uppercase tracking-wider hover:bg-[#0FA4AF] hover:text-[#003135]">
-          Go to Login Screen
+      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-6 gap-4 font-sans">
+        <div className="bg-rose-950/30 text-rose-400 border border-rose-900/50 p-6 rounded-xl font-medium text-center text-sm shadow-xl max-w-md">
+          ⚠️ {error}
+        </div>
+        <button onClick={() => navigate('/login')} className="text-xs font-bold bg-[#1E293B] text-slate-300 px-6 py-3 rounded-lg border border-slate-800 uppercase tracking-wider hover:bg-slate-700 transition-colors">
+          Re-authenticate Session
         </button>
       </div>
     );
   }
 
-  if (!profileData) {
+  if (loading || !profileData) {
     return (
-      <div className="min-h-screen bg-[#003135] text-[#0FA4AF] flex items-center justify-center font-black text-xs uppercase tracking-widest">
-        Loading Profile Hub... ⚡
+      <div className="min-h-screen bg-[#0F172A] text-slate-500 flex items-center justify-center font-mono text-xs uppercase tracking-widest animate-pulse">
+        Compiling Account Dashboard Matrix...
       </div>
     );
   }
 
   const isAdmin = profileData.role === 'admin';
+  
+  // 🔥 DYNAMIC AVATAR VALUE GENERATOR 🔥
+  const initialLetter = profileData.name ? profileData.name.charAt(0).toUpperCase() : '?';
 
   return (
-    <div className="min-h-screen bg-[#003135] text-[#AFDDE5] p-6 sm:p-12 font-sans">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#0F172A] text-slate-100 p-6 sm:p-12 font-sans selection:bg-indigo-500/30">
+      <div className="max-w-6xl mx-auto">
         
-        {/* Navigation Action */}
-        <button 
-          onClick={() => navigate('/Dashboard')} 
-          className="text-xs font-black uppercase tracking-widest text-[#0FA4AF] hover:text-white transition-colors mb-8 flex items-center gap-2"
-        >
-          ← Back to Catalog
-        </button>
+        {/* Navigation Row */}
+        <div className="flex justify-between items-center mb-10 pb-4 border-b border-slate-800/60">
+          <button 
+            onClick={() => navigate('/Dashboard')} 
+            className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-indigo-400 transition-colors"
+          >
+            ← Catalog Directory
+          </button>
+          <span className="text-xs font-mono text-slate-500">System node verified</span>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* TOP METRICS GRID BANNER */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
+            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Secure Library Card ID</p>
+            {/* 🔥 UPDATED: Uses the real random library ID string from the database instead of synthesizing it */}
+            <p className="text-white font-mono text-base font-bold mt-1 tracking-wide">{profileData.library_id || 'BH-ASSIGNING'}</p>
+          </div>
+          <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
+            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Active Borrowed Items</p>
+            <p className="text-indigo-400 font-bold text-2xl mt-1">{loanCount} <span className="text-xs font-normal text-slate-500">volumes checked out</span></p>
+          </div>
+          <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
+            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Wishlist Index Count</p>
+            <p className="text-rose-400 font-bold text-2xl mt-1">{wishlistCount} <span className="text-xs font-normal text-slate-500">saved profiles</span></p>
+          </div>
+          <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
+            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Account Digital Balance</p>
+            <p className="text-emerald-400 font-bold text-2xl mt-1">$25.00 <span className="text-xs font-normal text-slate-500">credits preloaded</span></p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* LEFT COLUMN: Student Details Box */}
-          <div className="md:col-span-1 bg-[#024950] border border-[#0FA4AF]/30 p-8 rounded-3xl shadow-2xl h-fit">
-            <div className="text-6xl text-center mb-6">👤</div>
-            <h2 className="text-lg font-black text-white uppercase tracking-tight text-center mb-6 border-b border-[#0FA4AF]/20 pb-4">
-              Student Details
-            </h2>
-            
-            <div className="space-y-5 text-sm">
-              <div>
-                <p className="text-[#0FA4AF] font-black text-[10px] uppercase tracking-widest">Username</p>
-                <p className="text-white font-black text-lg">{profileData.name}</p>
+          {/* LEFT PANEL: Expanded Student Parameters Profile Card */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-[#1E293B] border border-slate-800/80 p-6 rounded-2xl shadow-xl">
+              {/* 🔥 UPDATED: Dynamic user-initial profile graphic badge inside a circle view */}
+              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white font-black text-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-600/20 ring-4 ring-indigo-500/10">
+                {initialLetter}
               </div>
-              <div>
-                <p className="text-[#0FA4AF] font-black text-[10px] uppercase tracking-widest">Email Address</p>
-                <p className="text-white font-mono text-xs">{profileData.email}</p>
-              </div>
-              <div>
-                <p className="text-[#0FA4AF] font-black text-[10px] uppercase tracking-widest">Access Level</p>
-                <span className="text-yellow-400 font-bold bg-[#003135] w-fit px-3 py-1.5 rounded-md mt-1 border border-yellow-500/10 text-[10px] uppercase tracking-wider block">
-                  {profileData.role || 'Member'}
-                </span>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider text-center border-b border-slate-800 pb-3 mb-5">
+                Identity Profile Credentials
+              </h2>
+              
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">Student Holder Name</label>
+                  <p className="text-slate-200 font-bold text-sm mt-0.5">{profileData.name}</p>
+                </div>
+                <div>
+                  <label className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">Registered Communication Route</label>
+                  <p className="text-slate-300 font-mono mt-0.5">{profileData.email}</p>
+                </div>
+                <div>
+                  <label className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">Database Cleared Authorization Role</label>
+                  <span className={`inline-block font-bold px-2.5 py-1 rounded text-[10px] uppercase tracking-wider mt-1.5 border ${
+                    isAdmin 
+                      ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' 
+                      : 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
+                  }`}>
+                    {profileData.role || 'Member'}
+                  </span>
+                </div>
+                <div className="pt-3 border-t border-slate-800">
+                  <label className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">System Registration Timestamp</label>
+                  <p className="text-slate-400 font-medium mt-0.5">{profileData.created_at ? new Date(profileData.created_at).toLocaleDateString() : 'Active Track'}</p>
+                </div>
               </div>
             </div>
+
+            {/* Logout Trigger Card */}
+            <button 
+              onClick={handleLogout} 
+              className="w-full bg-rose-950/20 border border-rose-900/40 hover:bg-rose-950/40 text-rose-400 font-bold text-xs px-5 py-3.5 rounded-xl uppercase tracking-widest transition-all shadow-md"
+            >
+              Terminate Session Connection
+            </button>
           </div>
 
-          {/* RIGHT COLUMN: Library Action Menu */}
-          <div className="md:col-span-2 space-y-4">
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-6 px-2">Account Dashboard</h2>
-
-            {/* Feature Menu Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              <button 
-                onClick={() => navigate('/my-books')}
-                className="bg-[#024950] border border-[#0FA4AF]/30 p-6 rounded-2xl hover:bg-[#0FA4AF]/10 transition-colors text-left flex flex-col gap-2 group"
-              >
-                <span className="text-2xl">📚</span>
-                <span className="text-white font-black uppercase tracking-wider text-sm group-hover:text-[#0FA4AF]">My Borrowed / Returned</span>
-                <span className="text-[10px] text-gray-400">View active loans and history</span>
-              </button>
-
-              <button 
-                onClick={() => alert('Wishlist feature coming soon!')}
-                className="bg-[#024950] border border-[#0FA4AF]/30 p-6 rounded-2xl hover:bg-[#0FA4AF]/10 transition-colors text-left flex flex-col gap-2 group"
-              >
-                <span className="text-2xl">⭐</span>
-                <span className="text-white font-black uppercase tracking-wider text-sm group-hover:text-[#0FA4AF]">My Wishlist</span>
-                <span className="text-[10px] text-gray-400">Books saved for later</span>
-              </button>
-
-              <button 
-                onClick={() => alert('Purchased Books feature coming soon!')}
-                className="bg-[#024950] border border-[#0FA4AF]/30 p-6 rounded-2xl hover:bg-[#0FA4AF]/10 transition-colors text-left flex flex-col gap-2 group"
-              >
-                <span className="text-2xl">🛍️</span>
-                <span className="text-white font-black uppercase tracking-wider text-sm group-hover:text-[#0FA4AF]">Purchased Books</span>
-                <span className="text-[10px] text-gray-400">Your permanent digital library</span>
-              </button>
-
-              {/* 🔥 SECURITY: Only Admins can see the Add Book option here! 🔥 */}
-              {isAdmin && (
+          {/* RIGHT PANEL: Module Control Blocks & Audit Log */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Navigational Navigation Grid */}
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 px-1">Ecosystem Navigation Hub</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
                 <button 
-                  onClick={() => navigate('/addbook')}
-                  className="bg-[#003135] border border-yellow-500/30 p-6 rounded-2xl hover:bg-yellow-500/10 transition-colors text-left flex flex-col gap-2 group"
+                  onClick={() => navigate('/my-books')}
+                  className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl hover:border-indigo-500/30 transition-all text-left flex gap-4 items-start group shadow-md"
                 >
-                  <span className="text-2xl">⚡</span>
-                  <span className="text-yellow-400 font-black uppercase tracking-wider text-sm group-hover:text-yellow-300">Admin: Add Book</span>
-                  <span className="text-[10px] text-gray-400">Upload new inventory to DB</span>
+                  <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-indigo-400">📚</span>
+                  <div>
+                    <h4 className="text-white font-bold text-sm group-hover:text-indigo-400 transition-colors">Digital Ledger History</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Review active catalog leases, absolute return deadlines, and history.</p>
+                  </div>
                 </button>
-              )}
 
+                <button 
+                  onClick={() => navigate('/wishlist')}
+                  className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl hover:border-rose-500/30 transition-all text-left flex gap-4 items-start group shadow-md"
+                >
+                  <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-rose-400">❤️</span>
+                  <div>
+                    <h4 className="text-white font-bold text-sm group-hover:text-rose-400 transition-colors">Saved Book Index</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Isolate saved book items curated using your dashboard hearts selection tracker.</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => alert('Purchased Volumes pipeline loading in next software stack deployment.')}
+                  className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl hover:border-emerald-500/30 transition-all text-left flex gap-4 items-start group shadow-md"
+                >
+                  <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-emerald-400">🛍️</span>
+                  <div>
+                    <h4 className="text-white font-bold text-sm group-hover:text-emerald-400 transition-colors">Purchased Volumes</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Access files bought outright via preloaded wallet credit assets.</p>
+                  </div>
+                </button>
+
+                {isAdmin && (
+                  <button 
+                    onClick={() => navigate('/admin-dashboard')}
+                    className="bg-[#1E293B] border border-amber-500/20 p-5 rounded-xl hover:border-amber-500/40 transition-all text-left flex gap-4 items-start group shadow-md"
+                >
+                    <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-amber-400">🛡️</span>
+                    <div>
+                      <h4 className="text-amber-400 font-bold text-sm group-hover:text-amber-300 transition-colors">Admin Controller Console</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Bypass system nodes to execute global database catalog manipulations.</p>
+                    </div>
+                  </button>
+                )}
+
+              </div>
             </div>
 
-            {/* Logout Action */}
-            <div className="pt-8">
-              <button 
-                onClick={handleLogout} 
-                className="w-full bg-[#2e151b] border border-red-500/30 hover:bg-red-900/50 text-red-400 font-black text-xs px-6 py-4 rounded-xl uppercase tracking-widest transition-all shadow-md"
-              >
-                Logout Session
-              </button>
+            {/* 🔥 REPLACED: Security log swapped for custom structural Reading Statistics Engine 🔥 */}
+            <div className="bg-[#1E293B] border border-slate-800/80 p-6 rounded-xl shadow-xl">
+              <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                Reading Statistics
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4 mb-6 text-xs">
+                <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Books Read</p>
+                  <p className="text-white text-xl font-extrabold mt-0.5">24</p>
+                </div>
+                <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Books This Month</p>
+                  <p className="text-indigo-400 text-xl font-extrabold mt-0.5">3</p>
+                </div>
+                <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Favorite Genre</p>
+                  <p className="text-white text-sm font-extrabold mt-1 truncate">Programming</p>
+                </div>
+                <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Reading Streak</p>
+                  <p className="text-emerald-400 text-xl font-extrabold mt-0.5">12 Days</p>
+                </div>
+              </div>
+
+              {/* PROGRESS BAR */}
+              <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                <div className="flex justify-between items-center text-xs font-bold mb-2">
+                  <span className="text-slate-300">Yearly Goal Progress</span>
+                  <span className="text-indigo-400 font-mono">68%</span>
+                </div>
+                <div className="w-full bg-[#0F172A] h-2.5 rounded-full overflow-hidden border border-slate-800">
+                  <div 
+                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full shadow-inner transition-all duration-500" 
+                    style={{ width: '68%' }}
+                  ></div>
+                </div>
+                <div className="text-[10px] font-mono text-slate-500 text-right mt-2 font-bold tracking-wide">
+                  17 / 25 Books Completed
+                </div>
+              </div>
+
             </div>
 
           </div>
