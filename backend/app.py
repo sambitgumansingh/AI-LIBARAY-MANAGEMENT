@@ -10,7 +10,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "fallback-secret-key")
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "fallback_temporary_signature_token")
 jwt = JWTManager(app)
 
 # Initialize MongoDB Client Connection

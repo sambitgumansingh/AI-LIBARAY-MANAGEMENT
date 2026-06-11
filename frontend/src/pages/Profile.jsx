@@ -10,8 +10,17 @@ const Profile = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 🔥 SECURITY ROLE-ENFORCEMENT GUARD 🔥
+    const cachedUser = localStorage.getItem('user');
+    if (cachedUser) {
+      const parsedUser = JSON.parse(cachedUser);
+      if (parsedUser.role === 'admin') {
+        navigate('/admin-dashboard');
+        return;
+      }
+    }
+
     const token = localStorage.getItem('token');
-    
     if (!token) {
       navigate('/login');
       return;
@@ -74,8 +83,13 @@ const Profile = () => {
 
   const isAdmin = profileData.role === 'admin';
   
-  // 🔥 DYNAMIC AVATAR VALUE GENERATOR 🔥
+  // DYNAMIC AVATAR VALUE GENERATOR
   const initialLetter = profileData.name ? profileData.name.charAt(0).toUpperCase() : '?';
+
+  // Dynamic progress mathematical engine
+  const goalCurrent = profileData.stats?.yearly_goal_current || 0;
+  const goalTarget = profileData.stats?.yearly_goal_target || 25;
+  const progressPercentage = Math.round((goalCurrent / goalTarget) * 100);
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-100 p-6 sm:p-12 font-sans selection:bg-indigo-500/30">
@@ -96,7 +110,6 @@ const Profile = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
             <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Secure Library Card ID</p>
-            {/* 🔥 UPDATED: Uses the real random library ID string from the database instead of synthesizing it */}
             <p className="text-white font-mono text-base font-bold mt-1 tracking-wide">{profileData.library_id || 'BH-ASSIGNING'}</p>
           </div>
           <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
@@ -109,7 +122,10 @@ const Profile = () => {
           </div>
           <div className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl shadow-md">
             <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Account Digital Balance</p>
-            <p className="text-emerald-400 font-bold text-2xl mt-1">$25.00 <span className="text-xs font-normal text-slate-500">credits preloaded</span></p>
+            <p className="text-emerald-400 font-bold text-2xl mt-1">
+              ${profileData.balance !== undefined ? parseFloat(profileData.balance).toFixed(2) : '0.00'} 
+              <span className="text-xs font-normal text-slate-500"> credits</span>
+            </p>
           </div>
         </div>
 
@@ -118,7 +134,6 @@ const Profile = () => {
           {/* LEFT PANEL: Expanded Student Parameters Profile Card */}
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-[#1E293B] border border-slate-800/80 p-6 rounded-2xl shadow-xl">
-              {/* 🔥 UPDATED: Dynamic user-initial profile graphic badge inside a circle view */}
               <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white font-black text-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-600/20 ring-4 ring-indigo-500/10">
                 {initialLetter}
               </div>
@@ -161,7 +176,7 @@ const Profile = () => {
             </button>
           </div>
 
-          {/* RIGHT PANEL: Module Control Blocks & Audit Log */}
+          {/* RIGHT PANEL: Module Control Blocks & Reading Analytics */}
           <div className="lg:col-span-2 space-y-6">
             
             {/* Navigational Navigation Grid */}
@@ -192,7 +207,7 @@ const Profile = () => {
                 </button>
 
                 <button 
-                  onClick={() => alert('Purchased Volumes pipeline loading in next software stack deployment.')}
+                  onClick={() => navigate('/purchased-books')}
                   className="bg-[#1E293B] border border-slate-800 p-5 rounded-xl hover:border-emerald-500/30 transition-all text-left flex gap-4 items-start group shadow-md"
                 >
                   <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-emerald-400">🛍️</span>
@@ -202,23 +217,10 @@ const Profile = () => {
                   </div>
                 </button>
 
-                {isAdmin && (
-                  <button 
-                    onClick={() => navigate('/admin-dashboard')}
-                    className="bg-[#1E293B] border border-amber-500/20 p-5 rounded-xl hover:border-amber-500/40 transition-all text-left flex gap-4 items-start group shadow-md"
-                >
-                    <span className="text-xl bg-slate-900 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-800 text-amber-400">🛡️</span>
-                    <div>
-                      <h4 className="text-amber-400 font-bold text-sm group-hover:text-amber-300 transition-colors">Admin Controller Console</h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Bypass system nodes to execute global database catalog manipulations.</p>
-                    </div>
-                  </button>
-                )}
-
               </div>
             </div>
 
-            {/* 🔥 REPLACED: Security log swapped for custom structural Reading Statistics Engine 🔥 */}
+            {/* Reading Statistics Panel Layout */}
             <div className="bg-[#1E293B] border border-slate-800/80 p-6 rounded-xl shadow-xl">
               <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
@@ -228,36 +230,36 @@ const Profile = () => {
               <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4 mb-6 text-xs">
                 <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Books Read</p>
-                  <p className="text-white text-xl font-extrabold mt-0.5">24</p>
+                  <p className="text-white text-xl font-extrabold mt-0.5">{profileData.stats?.total_books_read ?? 0}</p>
                 </div>
                 <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Books This Month</p>
-                  <p className="text-indigo-400 text-xl font-extrabold mt-0.5">3</p>
+                  <p className="text-indigo-400 text-xl font-extrabold mt-0.5">{profileData.stats?.books_this_month ?? 0}</p>
                 </div>
                 <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Favorite Genre</p>
-                  <p className="text-white text-sm font-extrabold mt-1 truncate">Programming</p>
+                  <p className="text-white text-sm font-extrabold mt-1 truncate">{profileData.stats?.favorite_genre || 'None yet'}</p>
                 </div>
                 <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Reading Streak</p>
-                  <p className="text-emerald-400 text-xl font-extrabold mt-0.5">12 Days</p>
+                  <p className="text-emerald-400 text-xl font-extrabold mt-0.5">{profileData.stats?.reading_streak ?? 0} Days</p>
                 </div>
               </div>
 
-              {/* PROGRESS BAR */}
+              {/* Dynamic Goal Bar Visualization Canvas */}
               <div className="bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
                 <div className="flex justify-between items-center text-xs font-bold mb-2">
                   <span className="text-slate-300">Yearly Goal Progress</span>
-                  <span className="text-indigo-400 font-mono">68%</span>
+                  <span className="text-indigo-400 font-mono">{progressPercentage}%</span>
                 </div>
                 <div className="w-full bg-[#0F172A] h-2.5 rounded-full overflow-hidden border border-slate-800">
                   <div 
-                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full shadow-inner transition-all duration-500" 
-                    style={{ width: '68%' }}
+                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full shadow-inner transition-all duration-300" 
+                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
                   ></div>
                 </div>
                 <div className="text-[10px] font-mono text-slate-500 text-right mt-2 font-bold tracking-wide">
-                  17 / 25 Books Completed
+                  {goalCurrent} / {goalTarget} Books Completed
                 </div>
               </div>
 

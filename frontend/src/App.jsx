@@ -10,6 +10,8 @@ import Navbar from './components/Navbar';
 import Checkout from './pages/Checkout';
 import AdminDashboard from './pages/AdminDashboard';
 import Wishlist from './pages/Wishlist';
+import WriteReview from './pages/WriteReview';
+import PurchasedBooks from './pages/PurchasedBooks';
 
 function App() {
   const token = localStorage.getItem('token');
@@ -36,6 +38,14 @@ function App() {
         <Route 
           path="/my-books" 
           element={isAuthenticated ? <MyBooks /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/purchased-books" 
+          element={isAuthenticated ? <PurchasedBooks /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/write-review/:bookId" 
+          element={isAuthenticated ? <WriteReview /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/book/:id" 

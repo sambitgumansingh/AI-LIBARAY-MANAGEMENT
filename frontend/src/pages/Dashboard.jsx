@@ -9,7 +9,6 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   
-  // 🔥 NEW: Wishlisted IDs Tracking Array 🔥
   const [wishlistedIds, setWishlistedIds] = useState([]);
   
   const [isAiOpen, setIsAiOpen] = useState(false);
@@ -26,12 +25,24 @@ const Dashboard = () => {
   ];
 
   useEffect(() => {
+    // 🔥 SECURITY ROLE-ENFORCEMENT GUARD 🔥
+    const cachedUser = localStorage.getItem('user');
+    if (cachedUser) {
+      const parsedUser = JSON.parse(cachedUser);
+      if (parsedUser.role === 'admin') {
+        navigate('/admin-dashboard');
+        return;
+      }
+    }
+
     const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
     
-    // 1. Fetch all books from inventory
     const fetchBooks = fetch('http://localhost:5000/api/books').then(res => res.json());
     
-    // 2. Fetch user's wishlist state to highlight existing red hearts
     const fetchWishlist = fetch('http://localhost:5000/api/wishlist', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -49,11 +60,10 @@ const Dashboard = () => {
         setError("Unable to interface with central database clusters.");
         setLoading(false);
       });
-  }, []);
+  }, [navigate]);
 
-  // 🔥 NEW: Inline Heart Click Toggle Mechanism 🔥
   const handleHeartToggle = async (e, bookId) => {
-    e.stopPropagation(); // 🧠 CRITICAL: Stop click from firing navigate() on the parent card
+    e.stopPropagation(); 
     const token = localStorage.getItem('token');
     if (!token) return alert("Session authentication missing.");
 
@@ -174,7 +184,7 @@ const Dashboard = () => {
                       className="h-44 w-32 object-cover rounded-md shadow-md group-hover:scale-[1.03] transition-transform duration-300 border border-slate-800/20"
                     />
                     
-                    {/* 🔥 THE ACTIVE FLOATING HEART BUTTON 🔥 */}
+                    {/* THE ACTIVE FLOATING HEART BUTTON */}
                     <button
                       onClick={(e) => handleHeartToggle(e, book._id)}
                       className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/70 border border-slate-700/30 backdrop-blur-sm shadow-md flex items-center justify-center transition-all hover:scale-110 active:scale-95"

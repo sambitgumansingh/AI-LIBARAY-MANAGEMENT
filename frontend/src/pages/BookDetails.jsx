@@ -5,11 +5,10 @@ const BookDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [book, setBook] = useState(null);
+  const [reviews, setReviews] = useState([]); // 🔥 NEW: Review state array
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  
-  // NEW: Wishlist State
   const [isWishlisted, setIsWishlisted] = useState(false);
 
   const userString = localStorage.getItem('user');
@@ -17,22 +16,34 @@ const BookDetails = () => {
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/book/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Could not find this book record.");
-        return res.json();
-      })
-      .then((data) => {
-        setBook(data);
+    const token = localStorage.getItem('token');
+    
+    // 1. Fetch Book Details
+    const fetchBookDetails = fetch(`http://localhost:5000/api/book/${id}`).then(res => res.json());
+    
+    // 2. Fetch Book Reviews List
+    const fetchReviewsList = fetch(`http://localhost:5000/api/book/${id}/reviews`).then(res => res.json());
+
+    // 3. Fetch Wishlist to check saved status
+    const fetchWishlist = fetch('http://localhost:5000/api/wishlist', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(res => res.ok ? res.json() : []);
+
+    Promise.all([fetchBookDetails, fetchReviewsList, fetchWishlist])
+      .then(([bookData, reviewsData, wishlistData]) => {
+        setBook(bookData);
+        setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+        if (Array.isArray(wishlistData)) {
+          setIsWishlisted(wishlistData.some(b => b._id === bookData._id));
+        }
         setLoading(false);
       })
       .catch((err) => {
-        setErrorMessage(err.message);
+        setErrorMessage("Failed to pull complete volume metadata arrays.");
         setLoading(false);
       });
   }, [id]);
 
-  // NEW: Toggle Wishlist Function
   const handleWishlistToggle = async () => {
     const token = localStorage.getItem('token');
     if (!token) return alert("Please log in to save books.");
@@ -49,45 +60,14 @@ const BookDetails = () => {
       const data = await res.json();
       if (res.ok) {
         setIsWishlisted(data.isSaved);
-        setSuccessMessage(data.message);
       }
     } catch (err) {
       setErrorMessage("Failed to update wishlist.");
     }
   };
 
-  const handleBorrowTransaction = async () => {
-    setErrorMessage('');
-    setSuccessMessage('');
-    const token = localStorage.getItem('token');
-
-    if (!token) {
-      setErrorMessage("Authentication token missing. Please log in.");
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:5000/api/borrow', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ bookId: book._id })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccessMessage("🎉 Redirecting to checkout logic...");
-        // Redirect to our soon-to-be-built checkout page!
-        setTimeout(() => navigate(`/checkout/${book._id}?type=borrow`), 1000);
-      } else {
-        setErrorMessage(data.error || "Transaction declined.");
-      }
-    } catch (err) {
-      setErrorMessage("Communication breakdown reaching server.");
-    }
+  const handleBorrowTransaction = () => {
+    navigate(`/checkout/${book._id}?type=borrow`);
   };
 
   const handlePurchaseClick = () => {
@@ -96,145 +76,151 @@ const BookDetails = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#003135] text-[#AFDDE5] flex items-center justify-center font-black text-xs tracking-widest uppercase">
-        Loading Inventory Data Sheet... ⚡
-      </div>
-    );
-  }
-
-  if (errorMessage && !book) {
-    return (
-      <div className="min-h-screen bg-[#003135] text-red-400 flex flex-col items-center justify-center p-6 gap-4 font-sans">
-        <p className="font-black bg-[#2e151b] border border-red-500/30 p-4 rounded-xl">⚠️ {errorMessage}</p>
-        <button onClick={() => navigate('/dashboard')} className="text-xs font-black bg-[#024950] text-[#AFDDE5] px-5 py-3 rounded-xl border border-[#0FA4AF]/30 uppercase tracking-wider">
-          Return to Dashboard
-        </button>
+      <div className="min-h-screen bg-[#0F172A] text-slate-500 flex items-center justify-center font-mono text-xs uppercase tracking-widest animate-pulse">
+        Querying inventory details ledger...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#003135] text-[#AFDDE5] p-6 sm:p-12 font-sans">
+    <div className="min-h-screen bg-[#0F172A] text-slate-100 p-6 sm:p-12 font-sans selection:bg-indigo-500/30">
       <div className="max-w-5xl mx-auto">
         
-        <div className="flex justify-between items-center mb-8 border-b border-[#0FA4AF]/20 pb-4">
-          <button onClick={() => navigate('/dashboard')} className="text-xs font-black uppercase tracking-widest text-[#0FA4AF] hover:underline transition-all">
+        <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+          <button onClick={() => navigate('/Dashboard')} className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-indigo-400 transition-colors">
             ← Back to Catalog Index
           </button>
-          <div className="flex items-center gap-1 text-sm font-bold text-white">
-            <span>🐝</span> BookHive Ledger
-          </div>
+          <div className="text-xs font-mono text-slate-500">BookHive Directory Shell</div>
         </div>
 
-        <div className="bg-[#024950] rounded-3xl p-6 sm:p-10 border border-[#0FA4AF]/30 shadow-2xl flex flex-col md:flex-row gap-10">
+        <div className="bg-[#1E293B] rounded-2xl p-6 sm:p-10 border border-slate-800/80 shadow-2xl flex flex-col md:flex-row gap-10">
           
-          {/* Cover Image & Wishlist Button */}
+          {/* Left Panel Cover Area */}
           <div className="w-full md:w-1/3 flex flex-col gap-4">
-            <div className="bg-[#003135]/60 p-4 rounded-2xl flex items-center justify-center shadow-inner border border-[#0FA4AF]/20">
+            <div className="bg-[#0F172A]/50 p-6 rounded-xl flex items-center justify-center border border-slate-800">
               <img 
                 src={book.image_url || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500'} 
                 alt={book.title} 
-                className="w-full h-auto object-cover rounded-xl shadow-2xl transition-transform duration-300 hover:scale-[1.02]"
+                className="w-full h-auto object-cover rounded shadow-xl hover:scale-[1.01] transition-transform duration-300"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500';
+                }}
               />
             </div>
             
-            {/* NEW: Wishlist Button */}
             <button 
               onClick={handleWishlistToggle}
-              className={`py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 border ${
+              className={`py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${
                 isWishlisted 
-                  ? 'bg-[#2e151b] text-red-400 border-red-500/30 hover:bg-red-900/50' 
-                  : 'bg-[#003135] text-[#AFDDE5] border-[#0FA4AF]/30 hover:bg-[#0FA4AF]/10'
+                  ? 'bg-rose-950/20 text-rose-400 border-rose-900/40 hover:bg-rose-950/40' 
+                  : 'bg-[#0F172A] text-slate-300 border-slate-800 hover:bg-slate-800'
               }`}
             >
-              {isWishlisted ? '❤️ In Wishlist' : '🤍 Add to Wishlist'}
+              {isWishlisted ? '❤️ Saved to Wishlist' : '🤍 Save to Wishlist'}
             </button>
           </div>
 
+          {/* Right Panel Main Data Area */}
           <div className="w-full md:w-2/3 flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-start">
-                <span className="text-[10px] tracking-widest font-black uppercase bg-[#003135] text-[#0FA4AF] px-3 py-1 rounded-md border border-[#0FA4AF]/20">
-                  {book.category || "General Volume"}
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] tracking-wider font-bold uppercase bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded">
+                  {book.category}
                 </span>
                 
-                {/* NEW: Rating Display */}
-                <div className="flex items-center gap-1 bg-[#003135] px-3 py-1 rounded-md border border-yellow-500/20">
-                  <span className="text-yellow-400 text-xs">⭐</span>
-                  <span className="text-white font-black text-xs">{book.rating || '4.8'} / 5</span>
+                <div className="flex items-center gap-1 bg-[#0F172A] px-2.5 py-1 rounded border border-slate-800">
+                  <span className="text-amber-400 text-xs">⭐</span>
+                  <span className="text-white font-bold text-xs">{book.rating || '4.8'}</span>
                 </div>
               </div>
               
-              <h1 className="text-3xl sm:text-4xl font-black text-white mt-4 tracking-tight leading-tight">{book.title}</h1>
-              <p className="text-sm text-[#AFDDE5] mt-1 font-medium">Authored by <span className="text-white font-black">{book.author}</span></p>
+              <h1 className="text-3xl font-extrabold text-white mt-4 tracking-tight leading-tight">{book.title}</h1>
+              <p className="text-xs text-slate-400 mt-1 font-medium">Authored by <span className="text-slate-200 font-bold">{book.author}</span></p>
               
-              <div className="mt-6 space-y-2.5 text-xs border-t border-[#003135]/60 pt-4">
-                {/* NEW: Price Display */}
-                <p className="text-gray-300 flex justify-between max-w-sm border-b border-[#003135] pb-2">
-                  <span>Permanent Ownership Price:</span> 
-                  <span className="text-green-400 font-black text-sm">${book.price || '14.99'}</span>
+              <div className="mt-6 space-y-2 text-xs border-t border-slate-800/80 pt-4 font-medium">
+                <p className="text-slate-400 flex justify-between max-w-sm border-b border-slate-800/40 pb-2">
+                  <span>Permanent Ownership Fee:</span> 
+                  <span className="text-emerald-400 font-bold text-sm">${book.price || '14.99'}</span>
                 </p>
-
-                <p className="text-gray-300 flex justify-between max-w-sm mt-2">
-                  <span>ISBN System Code:</span> 
-                  <span className="text-white font-mono font-bold">{book.isbn || 'N/A'}</span>
+                <p className="text-slate-400 flex justify-between max-w-sm pb-2 border-b border-slate-800/40">
+                  <span>ISBN System Registry Code:</span> 
+                  <span className="text-slate-300 font-mono font-bold">{book.isbn || 'N/A'}</span>
                 </p>
-                <p className="text-gray-300 flex justify-between max-w-sm">
-                  <span>Shelf Inventory Allocation:</span> 
-                  <span className={`${book.available > 0 ? 'text-emerald-400' : 'text-red-400'} font-black`}>
-                    {book.available} copies available
+                <p className="text-slate-400 flex justify-between max-w-sm">
+                  <span>Available Library Stocks:</span> 
+                  <span className={`${book.available > 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold`}>
+                    {book.available} copies remaining
                   </span>
-                </p>
-                <p className="text-gray-300 flex justify-between max-w-sm">
-                  <span>Active Waiting Queue:</span> 
-                  <span className="text-white font-bold">{book.queue_list?.length || 0} students pending</span>
                 </p>
               </div>
 
-              <p className="text-xs text-[#AFDDE5]/90 mt-6 leading-relaxed font-medium bg-[#003135]/40 p-4 rounded-xl border border-[#0FA4AF]/10">
-                {book.description || "No customized digital plot abstract metadata text has been uploaded..."}
+              <p className="text-xs text-slate-300 mt-6 leading-relaxed font-medium bg-[#0F172A]/40 p-4 rounded-xl border border-slate-800/60">
+                {book.description || "No plot synopsis record uploaded yet."}
               </p>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-[#003135]/60">
-              {errorMessage && <div className="bg-[#2e151b] text-red-400 border border-red-500/20 p-3 rounded-xl text-xs font-bold mb-4">⚠️ {errorMessage}</div>}
-              {successMessage && <div className="bg-[#003135] text-[#0FA4AF] border border-[#0FA4AF]/30 p-3 rounded-xl text-xs font-bold mb-4">{successMessage}</div>}
-
+            <div className="mt-8 pt-6 border-t border-slate-800/60">
               <div className="flex flex-col sm:flex-row gap-4">
-                
-                {/* NEW: Purchase Button */}
                 <button 
                   onClick={handlePurchaseClick}
-                  className="flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md bg-green-600 hover:bg-green-500 text-white border border-green-400/30"
+                  className="flex-1 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white"
                 >
-                  🛒 Purchase (${book.price || '14.99'})
+                  🛒 Purchase Outright (${book.price || '14.99'})
                 </button>
 
-                {/* UPDATED: Borrow / Waitlist Button */}
                 <button 
                   onClick={handleBorrowTransaction}
-                  className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${
-                    book.available > 0 
-                      ? 'bg-[#0FA4AF] hover:bg-[#0FA4AF]/90 text-[#003135]' 
-                      : 'bg-yellow-500 hover:bg-yellow-400 text-[#003135]'
+                  className={`flex-1 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md ${
+                    book.available > 0 ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-amber-600 hover:bg-amber-500 text-white'
                   }`}
                 >
-                  {book.available > 0 ? '🎟️ Borrow (14 Days)' : '⏳ Join Waitlist'}
+                  {book.available > 0 ? '🎟️ Borrow ' : '⏳ Join Waitlist Queue'}
                 </button>
-
-                {isAdmin && (
-                  <button 
-                    onClick={async () => { /* Delete Logic remains exactly the same */ }}
-                    className="px-6 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md bg-[#2e151b] text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white"
-                  >
-                    🗑️ Delete
-                  </button>
-                )}
               </div>
             </div>
           </div>
-
         </div>
+
+        {/* 🔥 NEW SECTION: READ-ONLY USER REVIEWS LOG 🔥 */}
+        <div className="mt-12 bg-[#1E293B] rounded-2xl p-6 sm:p-10 border border-slate-800/80 shadow-2xl">
+          <h2 className="text-lg font-bold text-white tracking-tight border-b border-slate-800 pb-4 mb-6 flex items-center gap-2">
+            <span>💬</span> Reader Opinions & Peer Reviews
+          </h2>
+
+          {reviews.length === 0 ? (
+            <p className="text-xs text-slate-500 italic py-4 text-center">No structural reviews have been filed for this book index track yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {reviews.map((rev) => (
+                <div key={rev._id} className="bg-[#0F172A]/40 p-5 rounded-xl border border-slate-800/60">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      {/* Displays name with Star indicator badge ONLY if has_star variable evaluates true */}
+                      <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                        {rev.user_name}
+                        {rev.has_star && (
+                          <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            ⭐ Verified Reader
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                        Status: {rev.status === 'completed' ? '📚 Completed Volume' : '🫥 Abandoned / Got Bored'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-amber-400">
+                      {'★'.repeat(Math.round(rev.rating)) + '☆'.repeat(5 - Math.round(rev.rating))}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-3 leading-relaxed font-medium">"{rev.comment}"</p>
+                  <p className="text-[10px] text-slate-600 font-mono text-right mt-2">{rev.timestamp}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

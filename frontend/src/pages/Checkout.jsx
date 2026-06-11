@@ -4,17 +4,24 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 const Checkout = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const transactionType = searchParams.get('type'); // Reads 'borrow' or 'purchase' parameters from route URL
+  const transactionType = searchParams.get('type'); // Reads 'borrow' or 'purchase' from route query
   const navigate = useNavigate();
 
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState({ type: '', message: '' });
-  
-  // 🔥 NEW: State tracking input for structural signature validation
   const [enteredLibraryId, setEnteredLibraryId] = useState('');
 
-  // Extract user details securely cached inside local storage
+  // 🔥 NEW: State metrics for custom lease data collection parameters
+  const todayStr = new Date().toISOString().split('T')[0];
+  const defaultDueStr = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(defaultDueStr);
+  const [phone, setPhone] = useState('');
+  const [notes, setNotes] = useState('');
+
+  // Extract user details securely cached inside local storage variables
   const userString = localStorage.getItem('user');
   const user = userString ? JSON.parse(userString) : { name: 'Student', email: 'Unknown', library_id: 'BH-NOT-FOUND' };
 
@@ -26,7 +33,7 @@ const Checkout = () => {
         setLoading(false);
       })
       .catch(() => {
-        setStatus({ type: 'error', message: 'Failed to synchronize inventory parameters.' });
+        setStatus({ type: 'error', message: 'Failed to synchronize inventory parameters from cloud.' });
         setLoading(false);
       });
   }, [id]);
@@ -34,26 +41,76 @@ const Checkout = () => {
   const handleConfirmTransaction = async () => {
     setStatus({ type: '', message: '' });
 
-    // 🔥 SECURITY VERIFICATION GATEWAY 🔥
+    // 1. SECURITY IDENTITY GATEWAY CHECK
     if (enteredLibraryId.trim().toUpperCase() !== user.library_id?.toUpperCase()) {
       setStatus({ 
         type: 'error', 
-        message: `Validation Exception: The token entered does not match your verified profile identity card signature (${user.library_id || "Verify in Profile"}).` 
+        message: `Validation Exception: Card ID does not match account card signature (${user.library_id || "Verify in Profile"}).` 
       });
       return;
     }
 
-    setStatus({ type: 'loading', message: 'Processing transaction nodes securely...' });
-    const token = localStorage.getItem('token');
+    // 2. ADDITIONAL CONDITIONAL LEASE FORMS INPUT VALIDATION
+    if (transactionType === 'borrow') {
+      if (!phone.trim()) {
+        setStatus({ type: 'error', message: 'Validation Exception: A phone contact string is mandatory for administrative oversight tracking.' });
+        return;
+      }
+      if (new Date(endDate) <= new Date(startDate)) {
+        setStatus({ type: 'error', message: 'Validation Exception: Specified end timeline selection must exceed start deployment date.' });
+        return;
+      }
+    }
 
-    // Simulate active transaction state settlement
-    setTimeout(() => {
-        setStatus({ 
-          type: 'success', 
-          message: `Transaction settled. You have successfully ${transactionType === 'purchase' ? 'claimed permanent ownership of' : 'borrowed'} this catalog volume.`
-        });
-        setTimeout(() => navigate('/my-books'), 2000); 
-    }, 1500);
+    setStatus({ type: 'loading', message: 'Processing ledger adjustments across database...' });
+    const token = localStorage.getItem('token');
+    const targetEndpoint = transactionType === 'purchase' ? 'purchase' : 'borrow';
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/${targetEndpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          bookId: id,
+          // Forwarding custom configuration details straight to Atlas cluster
+          startDate: transactionType === 'borrow' ? startDate : null,
+          endDate: transactionType === 'borrow' ? endDate : null,
+          phone: transactionType === 'borrow' ? phone : null,
+          notes: transactionType === 'borrow' ? notes : null
+        })
+      });
+      
+      if (response.status === 401) {
+        setStatus({ type: 'error', message: '⚠️ Session expired or invalid. Re-routing to authentication gate...' });
+        localStorage.clear();
+        setTimeout(() => navigate('/login'), 2500);
+        return;
+      }
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setStatus({ type: 'success', message: data.message });
+        
+        // Auto-update local cache parameters with fresh database parameters
+        fetch('http://localhost:5000/api/auth/profile', { 
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(freshUser => {
+            localStorage.setItem('user', JSON.stringify(freshUser));
+          });
+
+        setTimeout(() => navigate('/profile'), 2000);
+      } else {
+        setStatus({ type: 'error', message: data.error || 'Transaction transaction refused by server node.' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Communication fault reaching cloud network system node.' });
+    }
   };
 
   if (loading) {
@@ -68,7 +125,6 @@ const Checkout = () => {
     <div className="min-h-screen bg-[#0F172A] text-slate-100 p-6 sm:p-12 font-sans selection:bg-indigo-500/30">
       <div className="max-w-2xl mx-auto">
         
-        {/* Navigation Escape Route */}
         <button 
           onClick={() => navigate(-1)} 
           className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-indigo-400 transition-colors mb-6"
@@ -76,7 +132,6 @@ const Checkout = () => {
           ← Abort & Return to Index
         </button>
 
-        {/* Master Invoice Shell Card */}
         <div className="bg-[#1E293B] border border-slate-800 p-6 sm:p-10 rounded-2xl shadow-2xl relative overflow-hidden">
           
           <div className="text-center mb-8 border-b border-slate-800 pb-6">
@@ -86,12 +141,15 @@ const Checkout = () => {
             <p className="text-slate-400 text-xs font-medium mt-1">Review operational ledger parameters before execution.</p>
           </div>
 
-          {/* Item Meta Properties Summary Subpanel */}
           <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start bg-[#0F172A]/50 p-5 rounded-xl border border-slate-800/60 mb-6">
             <img 
-              src={book?.image_url || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500'} 
+              src={book?.image_url} 
               alt="Cover Allocation" 
               className="w-24 rounded shadow-md border border-slate-800"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500';
+              }}
             />
             <div className="flex-1 w-full text-center sm:text-left">
               <h2 className="text-lg font-bold text-white tracking-tight">{book?.title}</h2>
@@ -107,7 +165,7 @@ const Checkout = () => {
                   <span className={`font-bold uppercase tracking-wider text-[10px] ${
                     transactionType === 'purchase' ? 'text-emerald-400' : 'text-indigo-400'
                   }`}>
-                    {transactionType === 'purchase' ? 'Outright Purchase Asset' : 'Standard 14-Day Lease'}
+                    {transactionType === 'purchase' ? 'Outright Purchase Asset' : 'Standard Custom Lease'}
                   </span>
                 </div>
                 
@@ -121,7 +179,65 @@ const Checkout = () => {
             </div>
           </div>
 
-          {/* 🔥 DYNAMIC SECURITY VERIFICATION MANDATE INPUT BOX 🔥 */}
+          {/* 🔥 NEW DYNAMIC SECTION: RENDER CUSTOM FORM GATES IF TRANSACTION CLASSIFICATION IS BORROW 🔥 */}
+          {transactionType === 'borrow' && (
+            <div className="mb-6 bg-[#0F172A]/40 border border-slate-800 p-5 rounded-xl space-y-4">
+              <h3 className="text-white text-xs font-bold uppercase tracking-wider border-b border-slate-800 pb-2">
+                📋 Custom Lease Schedule Parameters
+              </h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1.5">Start Tracking Date</label>
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1.5">Expected Return Deadline</label>
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 pt-2">
+                <div>
+                  <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1.5">Active Contact Phone Number (Required)</label>
+                  <input 
+                    type="tel" 
+                    placeholder="e.g. +1 (555) 019-2834"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1.5">Alternative Communications / Admin Notes</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Preferred alternative email address or delivery track updates..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full bg-[#0F172A] border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* 🔥 STRICT FINE COMPLIANCE WARNING BLOCK RULE 🔥 */}
+              <div className="text-[11px] text-amber-400 font-medium bg-amber-500/5 border border-amber-500/10 p-3 rounded-lg leading-relaxed">
+                <span className="font-bold">⚠️ Overdue Regulation Mandate:</span> If this asset selection exceeds your selected return deadline date (<span className="font-mono font-bold text-white">{endDate}</span>), a strict overdue fine of <span className="font-bold text-white">$1.50 per day</span> will automatically scale against your preloaded account balance metrics.
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC SECURITY VERIFICATION MANDATE INPUT BOX */}
           <div className="mb-6 bg-[#0F172A]/30 border border-slate-800 p-4 rounded-xl">
             <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 text-center">
               Enter Unique Library Card ID Signature To Sign Order
